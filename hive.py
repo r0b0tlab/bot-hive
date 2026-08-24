@@ -39,7 +39,7 @@ def now_iso():
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
-# ---------- rolling project log (§10) ----------
+# ---------- rolling project log (§9) ----------
 
 def log_line(plan: str, entry: str):
     """Append one line to logs/<plan>.md, creating the file if needed."""
@@ -493,7 +493,7 @@ def selftest(args=None):
             assert ok, f"illegal {target} accepted"
         except SystemExit:
             assert not ok, f"legal {target} rejected"
-    # check-in + rolling log (§9, §10)
+    # check-in + rolling log (§8, §9)
     log_line("P-0000", "T-9999 [forge] check-in: smoke")
     log_line("P-0000", "T-9999 [forge] atlas steer: stay on spec")
     log_path = LOGS / "P-0000.md"
