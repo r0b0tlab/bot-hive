@@ -9,15 +9,22 @@ loader requires the match). Stdlib only.
 Usage: python3 scripts/validate_skills.py
 Checks repo skills/ plus the staged copies in every bot profile.
 """
+import os
+import pwd
 import re
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+# Real user home: Path.home() resolves to a phantom profile dir in desktop
+# sessions, which would silently skip every staged profile copy. Same fix
+# as scripts/configure_group_routing.py (T-0006).
+REAL_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
+PROFILES = Path(os.environ.get("HERMES_PROFILES_ROOT",
+                               REAL_HOME / ".hermes" / "profiles"))
 SKILL_DIRS = [REPO / "skills"]
-HOME = Path.home()
 for bot in ("atlas", "scout", "forge", "quill", "audit", "data"):
-    SKILL_DIRS.append(HOME / ".hermes" / "profiles" / bot / "skills")
+    SKILL_DIRS.append(PROFILES / bot / "skills")
 
 
 def parse_fm(text):

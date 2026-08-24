@@ -243,6 +243,11 @@ def cmd_done(args):
         fail(f"{args.card}: must be claimed/running to mark done")
     path = meta["_path"]
     text = path.read_text()
+    if not re.search(r"^##\s*Result\b", text, re.MULTILINE):
+        fail(f"{args.card}: card has no '## Result' section — add one per "
+             f"PROTOCOL.md §2 before marking done")
+    if not (args.summary or "").strip():
+        fail(f"{args.card}: '--summary' must be non-empty (Result.Summary required)")
     new = text
     def rep(section, value):
         nonlocal new
@@ -443,7 +448,38 @@ def selftest(args=None):
     text = log_path.read_text()
     assert "check-in: smoke" in text and "steer: stay on spec" in text, \
         "log entries missing"
-    print("selftest: PASS (state machine + check-in + rolling log)")
+    # done-Result enforcement (T-0011)
+    import types
+    def mk_result_card(card_id: str, with_result: bool):
+        m = {"id": card_id, "title": "no-result", "lane": "forge",
+             "status": "claimed", "owner": "forge", "plan": "P-0000", "deps": [],
+             "priority": 2, "attempts": 0, "created": now_iso()}
+        p = BOARD / f"{card_id}.md"
+        body = render_fm(m) + ("\n## Objective\nx\n## Spec\nDo:\nDo not:\n"
+                               "## Acceptance criteria\n- [ ] c\n## Artifact contract\nx\n")
+        if with_result:
+            body += "## Result\n(filled at `hive done`)\nSummary: \n"
+        p.write_text(body)
+        m["_path"] = p
+        return m
+    # card WITHOUT the Result section -> done must fail
+    mk_result_card("T-9998", with_result=False)
+    try:
+        cmd_done(types.SimpleNamespace(card="T-9998", summary="x",
+                                       artifacts="", evidence="", caveats=""))
+        assert False, "done accepted a card with no Result section"
+    except SystemExit:
+        pass
+    # card WITH Result but empty --summary -> done must fail
+    mk_result_card("T-9997", with_result=True)
+    try:
+        cmd_done(types.SimpleNamespace(card="T-9997", summary="",
+                                       artifacts="", evidence="", caveats=""))
+        assert False, "done accepted an empty --summary"
+    except SystemExit:
+        pass
+    print("selftest: PASS (state machine + check-in + rolling log "
+          "+ done-Result enforcement)")
     return 0
 
 
