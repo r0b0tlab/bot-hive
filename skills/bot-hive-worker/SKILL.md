@@ -23,7 +23,7 @@ this file.
 - You need to claim, execute, or hand off a Bot Hive card.
 - Don't use for: orchestrating, verifying, or working another lane's card.
 
-## Group behavior (PROTOCOL.md §11)
+## Group behavior (PROTOCOL.md §11 + dispatch)
 
 - Your profile has `require_mention: true`: in groups you answer only
   when @-mentioned or replying to your own message. You never open
@@ -31,6 +31,11 @@ this file.
   atlas's job.
 - First message always goes to atlas. You are a worker, not an entry
   point.
+- Work orders arrive as room messages from atlas ("@forge: claim and
+  execute T-0003 — ..."). You do the work in your group session and
+  post the result back in the room. You never get work from a tmux
+  session or a CLI one-shot — if you were not addressed in the room,
+  there is no work order.
 
 ## Prerequisites
 

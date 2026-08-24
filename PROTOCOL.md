@@ -163,45 +163,42 @@ Fix applied: <one line>
 Failures are also appended to the plan's rolling log (§10) with the
 rework round.
 
-## 8. Invocation
+## 8. Invocation — dispatch through the group chat
 
-Atlas spawns lane bots in interactive tmux sessions so it can watch and
-steer them (see §9). Session name = `hive-<card>`.
+All team activity happens in the desktop group chat (the room), never in
+detached tmux sessions or CLI one-shots. The room is the team's only
+work surface: assignments, progress, steers, and results are room
+messages so the user sees the team's actual work as it happens.
 
-```
-tmux new-session -d -s hive-T-0001 -x 120 -y 40 'hermes -p forge'
-sleep 8 && tmux send-keys -t hive-T-0001 'Execute card T-0001. Read
-/home/am/bot-hive/board/T-0001.md and PROTOCOL.md. Claim it, do the
-work, fill the Result, and mark it done.' Enter
-```
+Dispatch: atlas writes the assignment as a room message addressing the
+bot by handle ("@forge: claim and execute T-0003 — <one-line spec>").
+The desktop routes it into that bot's group session. The lane bot works
+in that session (its SOUL.md + worker skill apply) and reports in the
+room when done.
 
-Timeouts: 600 s minimum for build cards; build+test cards 900 s.
-`tmux kill-session -t hive-T-0001` when the card is done or failed.
+Atlas never spawns `hermes -p` or tmux for lane work. If a card needs a
+bot that is not in the room, atlas flags it to the user — never works
+around the room.
 
 ## 9. Check-in role (atlas steers the team)
 
 Atlas checks in on every `claimed`/`running` card every 60 seconds from
-claim time until the card is `done` or `failed`.
-
-A check-in is:
-1. Record it: `python3 hive.py checkin T-0001 --note "<status>"`
-2. Observe: `tmux capture-pane -t hive-T-0001 -p | tail -30`
-   (or the card Result/Artifact contract if the bot updated it)
-3. Compare with the previous check-in.
+claim time until the card is `done` or `failed`. In the group-chat model
+this means: read the room (`hive log` + the desktop's room log) and the
+board (`hive status`), and post a targeted steer message in the room
+addressing the bot by handle when a trigger fires.
 
 Steer triggers (any one fires a steer):
-- **Stuck:** no state change AND no new output since the last check-in.
+- **Stuck:** no state change AND no new room/board activity since the
+  last check-in.
 - **Off task:** the bot is working on something not in the card's Spec or
   outside its lane (scope drift, unrelated files, wrong deliverable).
 - **Misreading the plan:** output contradicts the acceptance criteria or
   the original user request.
 
-Steer action: `tmux send-keys -t hive-T-0001 '<targeted message>' Enter`.
-A steer is targeted, not generic: name the card, the artifact, and what is
-expected. Examples:
-- "Stuck on T-0001 — you've had no output for 2 min. What is blocking?
-  If the spec is unclear, hive block and report; do not guess."
-- "Off task on T-0001 — the card asks for X only. Stop doing Y."
+Steer action: a room message, e.g. "@forge: T-0003 — you've been running
+3 min with no board movement. What's blocking? If the spec is unclear,
+`hive block` and report; do not guess."
 
 Escalation: two consecutive stuck check-ins → atlas `hive block` with the
 stuck reason and reports to the user. The card must not sit in a stuck

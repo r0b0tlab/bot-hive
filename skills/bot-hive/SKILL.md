@@ -44,17 +44,17 @@ atlas, never a lane bot.
 ## Prerequisites
 
 - `~/bot-hive/` repo present with PROTOCOL.md, hive.py, board/, logs/.
-- tmux installed (`tmux -V`) — steering requires an interactive session.
-- Lane profiles exist (`hermes profile list` shows scout, forge, quill,
-  audit, and atlas).
+- The team group chat exists in the desktop Bots pane with all 6 bots
+  (atlas, scout, forge, quill, audit, data) as members.
+- Lane profiles exist (`hermes profile list` shows the roster).
 - Python 3.11+ for hive.py (stdlib only, no third-party deps).
 
 ## How to Run
 
 - All board actions: `terminal(command="python3 ~/bot-hive/hive.py <cmd>", timeout=...)`.
-- Spawn a lane bot: `terminal(command="tmux new-session -d -s hive-T-0001 -x 120 -y 40 'hermes -p forge'", timeout=10)`.
-- Steer it: `terminal(command="tmux send-keys -t hive-T-0001 '<message>' Enter", timeout=10)`.
-- Observe it: `terminal(command="tmux capture-pane -t hive-T-0001 -p | tail -30", timeout=10)`.
+- Dispatch a card: post in the group chat room — `@forge: claim and execute T-0003 — <spec>`. The desktop routes it to that bot's group session.
+- Steer: post in the room addressing the bot by handle.
+- Observe: `hive status` + `hive log --plan P-xxxx` + the room log. Never tmux, never `hermes -p` for lane work.
 
 ## Quick Reference
 
@@ -86,15 +86,16 @@ them; `verify` is audit's alone.
    approval. Revisions replace the plan, never silently pivot.
    Completion: user approved.
 5. Queue (`hive plan --plan P-xxxx`). Completion: cards queued in dep order.
-6. Spawn each ready card's bot in tmux `hive-<card>` and send the work
-   order naming card + PROTOCOL.md. Completion: session exists, card
-   claimed by the right lane.
-7. Check-in loop. Every 60 s while claimed/running: `hive checkin`,
-   capture-pane, compare with previous. Steer when stuck (no state change
-   AND no new output), off task (outside Spec/lane), or misreading the
-   plan (contradicts acceptance criteria or original request). Two
-   consecutive stuck check-ins: `hive block` and tell the user.
-   Completion: card reached done.
+6. Dispatch. Post the work order in the room addressing the bot by
+   handle ("@forge: claim and execute T-0003 — <one-line spec>"). The
+   desktop routes it to that bot's group session. Completion: session
+   claimed, card claimed by the right lane.
+7. Check-in loop. Every 60 s while claimed/running: `hive checkin`, read
+   the room + board, compare with previous. Steer with a room message
+   when stuck (no state change AND no room/board activity), off task
+   (outside Spec/lane), or misreading the plan (contradicts acceptance
+   criteria or original request). Two consecutive stuck check-ins:
+   `hive block` and tell the user. Completion: card reached done.
 8. Promote dependents only when upstream is verified. Dispatch audit with
    original request + plan + card. Rework up to 2 rounds, then escalate.
    Completion: audit verdict recorded.
@@ -105,8 +106,8 @@ them; `verify` is audit's alone.
 ## Pitfalls
 
 - Never execute, claim, or verify. The lanes own those; you own the plan.
-- One-shot `hermes -p <bot> chat -q` cannot be steered mid-run. Always
-  spawn in tmux.
+- The group chat is the only work surface. If a bot is not in the room,
+  flag it to the user; never work around the room.
 - Cloned profiles inherit the kimi `model.base_url`. Switching a bot to
   another provider requires clearing it or the calls 401.
 - Rejected is not done. A rejected card is rework, not a finding report.

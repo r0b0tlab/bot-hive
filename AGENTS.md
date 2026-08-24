@@ -31,9 +31,10 @@ verdict. The orchestrator never executes work itself.
    `hive.py`; it must exit 0.
 6. New lane = new row in PROTOCOL.md §1 + new profile + new
    `souls/<lane>.md`. Do not reuse an existing bot for a new lane.
-7. Atlas checks in on claimed/running cards every 60 s (PROTOCOL.md §9)
-   and steers via tmux send-keys when a bot is stuck, off task, or
-   misreading the plan. Two stuck check-ins = block + escalate.
+7. All team activity happens in the desktop group chat (PROTOCOL.md §8).
+   Atlas never spawns tmux or `hermes -p` for lane work — it addresses a
+   bot in the room and the desktop routes the work order to that bot's
+   group session.
 8. `logs/<plan>.md` is the rolling project log: hive.py writes every
    status change and check-in; atlas writes the narrative. Append-only,
    one file per plan.

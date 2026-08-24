@@ -57,10 +57,11 @@ draft -> queued -> claimed -> running -> done -> [audit verdict]
                                      -> rejected -> queued (rework, max 2)
 ```
 
-Atlas checks in on every claimed/running card each 60 s: observes the
-bot's session (tmux), records the check-in, and steers when the bot is
-stuck, off task, or misreading the plan. Two consecutive stuck
-check-ins = block + report to the user.
+Atlas checks in on every claimed/running card each 60 s: reads the room
+and the board, records the check-in, and steers with a room message when
+the bot is stuck, off task, or misreading the plan. Two consecutive
+stuck check-ins = block + report to the user. All work flows through
+the desktop group chat — nothing runs in tmux or detached shells.
 
 Every plan has a rolling log (`logs/<plan>.md`): hive.py appends status
 changes and check-ins automatically; atlas appends the narrative (plan
