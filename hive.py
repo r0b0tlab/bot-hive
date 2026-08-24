@@ -365,6 +365,21 @@ def log_failure(meta: dict, notes: str):
         f.write(entry)
 
 
+def cmd_dashboard(args):
+    """Start the activity dashboard (dashboard/server.py) in the foreground.
+
+    Uses os.execv to replace this process with the server, so signals
+    (Ctrl-C) go straight to the HTTP server and no child is left behind.
+    """
+    server = Path(__file__).resolve().parent / "dashboard" / "server.py"
+    if not server.exists():
+        fail(f"dashboard server missing: {server}")
+    port = args.port or int(os.environ.get("PORT", "8099"))
+    print(f"hive dashboard → http://localhost:{port} (Ctrl-C to stop)")
+    os.execv(sys.executable, [sys.executable, str(server), "--port", str(port)])
+    return 0  # unreachable
+
+
 def selftest(args=None):
     """Exercise the state machine against a throwaway REPO copy."""
     import shutil
@@ -434,6 +449,7 @@ def main():
         ("log", cmd_log, [("--plan", dict(default="")), ("--entry", dict(default=""))]),
         ("status", cmd_status, [("card", dict(nargs="?"))]),
         ("show", cmd_status, [("card", dict(nargs="?"))]),
+        ("dashboard", cmd_dashboard, [("--port", dict(type=int, default=0))]),
         ("selftest", selftest, []),
     ]:
         p = sub.add_parser(name)
@@ -445,6 +461,7 @@ def main():
         "start": cmd_start, "done": cmd_done, "verify": cmd_verify,
         "close": cmd_close, "block": cmd_block, "release": cmd_release,
         "checkin": cmd_checkin, "log": cmd_log, "status": cmd_status,
+        "show": cmd_status, "dashboard": cmd_dashboard,
         "selftest": selftest,
     }[args.cmd]
     if not BOARD.exists():

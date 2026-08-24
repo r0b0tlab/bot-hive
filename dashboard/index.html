@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bot Hive — Activity Dashboard</title>
+<style>
+  :root {
+    --bg: #f4f6f8;
+    --panel: #ffffff;
+    --border: #dfe4ea;
+    --text: #1f2328;
+    --muted: #555b62;      /* never lighter than #666-equivalent on white */
+    --faint: #666666;
+    --accent: #0b5fff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  header.topbar {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .brand { font-size: 17px; font-weight: 700; letter-spacing: .2px; }
+  .brand .hive { color: var(--accent); }
+  .pulse {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #2e7d32; display: inline-block; margin-right: 6px;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100% {opacity: 1;} 50% {opacity: .35;} }
+  .updated { color: var(--muted); font-size: 12.5px; }
+  .filters { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  select {
+    font: inherit; color: var(--text);
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px 10px;
+  }
+  main { max-width: 1280px; margin: 0 auto; padding: 18px 20px 60px; }
+  h2.section {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--muted); margin: 22px 0 10px;
+  }
+  /* plans */
+  .plans { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .plan-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px;
+  }
+  .plan-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .plan-name { font-weight: 650; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .plan-count { color: var(--muted); font-size: 12.5px; }
+  .bar {
+    margin-top: 8px; height: 8px; border-radius: 999px;
+    background: #e8ebef; overflow: hidden;
+  }
+  .bar > .fill {
+    height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, #2e7d32, #43a047);
+    transition: width .4s ease;
+  }
+  .bar.full > .fill { background: linear-gradient(90deg, #1565c0, #1e88e5); }
+  .plan-statuses { margin-top: 8px; color: var(--muted); font-size: 12px; }
+  /* layout */
+  .layout { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+  /* board tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .tile {
+    background: var(--panel); border: 1px solid var(--border);
+    border-left: 5px solid #9e9e9e; border-radius: 12px;
+    padding: 12px 14px; cursor: pointer;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04);
+    transition: box-shadow .15s ease, transform .15s ease;
+  }
+  .tile:hover { box-shadow: 0 4px 14px rgba(16,24,40,.10); transform: translateY(-1px); }
+  .tile-top { display: flex; align-items: center; gap: 8px; }
+  .tile-id { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; }
+  .badge {
+    font-size: 11px; font-weight: 700; letter-spacing: .04em;
+    padding: 2px 9px; border-radius: 999px; text-transform: uppercase;
+  }
+  .tile-title { margin-top: 6px; font-weight: 600; }
+  .tile-meta { margin-top: 8px; color: var(--muted); font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .rework {
+    color: #b71c1c; font-weight: 700;
+  }
+  .deps { color: var(--faint); }
+  /* status palettes: tinted bg + dark accent text (all >= #666 dark) */
+  .st-draft    { border-left-color: #9e9e9e; } .st-draft .badge    { background:#eceff1; color:#455a64; }
+  .st-queued   { border-left-color: #1e88e5; } .st-queued .badge   { background:#e3f2fd; color:#0d47a1; }
+  .st-claimed  { border-left-color: #f9a825; } .st-claimed .badge  { background:#fff8e1; color:#7a5400; }
+  .st-running  { border-left-color: #43a047; } .st-running .badge  { background:#e8f5e9; color:#1b5e20; }
+  .st-done     { border-left-color: #00acc1; } .st-done .badge     { background:#e0f7fa; color:#006064; }
+  .st-verified { border-left-color: #7e57c2; } .st-verified .badge { background:#ede7f6; color:#4527a0; }
+  .st-closed   { border-left-color: #607d8b; } .st-closed .badge   { background:#eceff1; color:#37474f; }
+  .st-blocked  { border-left-color: #e53935; background:#fff5f5; } .st-blocked .badge { background:#ffebee; color:#b71c1c; }
+  .st-failed   { border-left-color: #b71c1c; background:#fdecec; } .st-failed .badge  { background:#ffcdd2; color:#7f0000; }
+  .st-rejected { border-left-color: #fb8c00; } .st-rejected .badge { background:#fff3e0; color:#e65100; }
+  /* side panels */
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
+  }
+  .panel h3 { margin: 0 0 8px; font-size: 13px; }
+  .lanechips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 3px 10px; font-size: 12.5px; color: var(--text);
+    background: #fafbfc;
+  }
+  .chip b { font-weight: 700; }
+  .running-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 0; border-bottom: 1px solid #eef1f4; gap: 8px;
+  }
+  .running-item:last-child { border-bottom: none; }
+  .running-item .rid { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; }
+  .running-item .rtt { color: var(--muted); font-size: 12px; }
+  button.watch {
+    font: inherit; font-size: 12px; font-weight: 600;
+    color: var(--accent); background: #eef4ff;
+    border: 1px solid #c9dcff; border-radius: 8px; padding: 4px 10px;
+    cursor: pointer; white-space: nowrap;
+  }
+  button.watch:hover { background: #e0ebff; }
+  .live-dot { color: #1b5e20; font-weight: 700; }
+  .dead-dot { color: #b71c1c; font-weight: 700; }
+  .empty { color: var(--muted); font-size: 13px; }
+  /* feed */
+  .feed-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .feed { max-height: 480px; overflow-y: auto; margin-top: 6px; }
+  .entry { padding: 7px 0; border-bottom: 1px solid #eef1f4; }
+  .entry:last-child { border-bottom: none; }
+  .entry .ts { color: var(--faint); font-size: 11.5px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .entry .pl {
+    display: inline-block; font-size: 10.5px; font-weight: 700;
+    background: #eef4ff; color: #0b3fa8; border-radius: 6px;
+    padding: 1px 6px; margin-left: 6px;
+  }
+  .entry .tx { margin-top: 2px; color: var(--text); font-size: 13px; }
+  /* modal */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(15,23,42,.35);
+    display: none; align-items: center; justify-content: center; z-index: 50;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: var(--panel); border-radius: 14px; width: min(860px, 94vw);
+    max-height: 86vh; overflow-y: auto; padding: 18px 20px;
+    box-shadow: 0 20px 60px rgba(16,24,40,.25);
+  }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; }
+  .modal-head .mid { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; font-size: 16px; }
+  button.close {
+    font: inherit; border: 1px solid var(--border); background: var(--panel);
+    border-radius: 8px; padding: 4px 12px; cursor: pointer; color: var(--text);
+  }
+  .modal h4 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  pre.tail {
+    background: #f6f8fa; border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word;
+    max-height: 320px; overflow-y: auto; color: var(--text); margin: 0;
+  }
+  .result-box {
+    background: #fbfbf7; border: 1px solid #e8e6d9; border-radius: 10px;
+    padding: 12px; white-space: pre-wrap; font-size: 13px; color: var(--text);
+  }
+  .state-note { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">bot<span class="hive">hive</span> · activity dashboard</div>
+  <div class="updated"><span class="pulse"></span>auto-refresh 5s · <span id="updated">loading…</span></div>
+  <div class="filters">
+    <select id="f-lane"><option value="">lane: all</option></select>
+    <select id="f-status"><option value="">status: all</option></select>
+    <select id="f-plan"><option value="">plan: all</option></select>
+  </div>
+</header>
+<main>
+  <h2 class="section">Plan progress</h2>
+  <div class="plans" id="plans"></div>
+
+  <div class="layout">
+    <section>
+      <h2 class="section">Board</h2>
+      <div class="tiles" id="tiles"></div>
+    </section>
+    <aside>
+      <h2 class="section">Running now</h2>
+      <div class="panel" id="running"></div>
+      <h2 class="section">Lane workload</h2>
+      <div class="panel"><div class="lanechips" id="lanes"></div></div>
+      <h2 class="section">Activity feed</h2>
+      <div class="panel">
+        <div class="feed-head">
+          <span class="empty" id="feed-count"></span>
+          <select id="f-feed-plan"><option value="">plan: all</option></select>
+        </div>
+        <div class="feed" id="feed"></div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="mid" id="m-id"></span>
+      <button class="close" id="m-close">close ✕</button>
+    </div>
+    <h4>Live reasoning (tmux tail)</h4>
+    <div class="state-note" id="m-state"></div>
+    <pre class="tail" id="m-tail"></pre>
+    <h4>Result</h4>
+    <div class="result-box" id="m-result"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const STATUS_ORDER = ["running","claimed","blocked","rejected","queued","done","verified","closed","failed","draft"];
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
+  (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const filters = { lane: "", status: "", plan: "", feedPlan: "" };
+let openCard = null;
+let lastStatus = null;
+
+async function j(u) {
+  const r = await fetch(u, { cache: "no-store" });
+  return r.json();
+}
+
+function fillSelect(sel, values, label) {
+  const cur = sel.value;
+  const opts = ['<option value="">' + label + ": all</option>"]
+    .concat(values.map(v => '<option value="' + esc(v) + '">' + label + ": " + esc(v) + "</option>"));
+  sel.innerHTML = opts.join("");
+  sel.value = cur;
+}
+
+function fmtTs(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString(undefined, { month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function renderStatus(data) {
+  lastStatus = data;
+  $("updated").textContent = "updated " + new Date().toLocaleTimeString();
+
+  const lanes = [...new Set(data.cards.map(c => c.lane).filter(Boolean))].sort();
+  const plans = [...new Set(data.cards.map(c => c.plan || "unassigned"))].sort();
+  const statuses = [...new Set(data.cards.map(c => c.status))].sort();
+  fillSelect($("f-lane"), lanes, "lane");
+  fillSelect($("f-plan"), plans, "plan");
+  fillSelect($("f-status"), statuses, "status");
+
+  // plan progress
+  const pc = Object.entries(data.plans).sort().map(([name, p]) => {
+    const pct = p.total ? Math.round(100 * p.complete / p.total) : 0;
+    const bits = Object.entries(p.by_status).sort().map(([s, n]) => s + " " + n).join(" · ");
+    return '<div class="plan-card"><div class="plan-head"><span class="plan-name">' + esc(name) +
+      '</span><span class="plan-count">' + p.complete + "/" + p.total + " verified</span></div>" +
+      '<div class="bar' + (pct === 100 ? " full" : "") + '"><div class="fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="plan-statuses">' + esc(bits) + "</div></div>";
+  });
+  $("plans").innerHTML = pc.join("") || '<div class="empty">no plans yet</div>';
+
+  // tiles
+  const cards = data.cards
+    .filter(c => (!filters.lane || c.lane === filters.lane))
+    .filter(c => (!filters.status || c.status === filters.status))
+    .filter(c => (!filters.plan || (c.plan || "unassigned") === filters.plan))
+    .sort((a, b) => {
+      const d = STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
+      return d !== 0 ? d : a.id.localeCompare(b.id);
+    });
+  $("tiles").innerHTML = cards.map(c => {
+    const rework = c.attempts > 0 ? '<span class="rework">↻ rework ×' + c.attempts + "</span>" : "";
+    const deps = (c.deps && c.deps.length) ? '<span class="deps">deps: ' + esc(c.deps.join(", ")) + "</span>" : "";
+    return '<div class="tile st-' + esc(c.status) + '" data-card="' + esc(c.id) + '">' +
+      '<div class="tile-top"><span class="tile-id">' + esc(c.id) + '</span>' +
+      '<span class="badge">' + esc(c.status) + "</span>" + rework + "</div>" +
+      '<div class="tile-title">' + esc(c.title) + "</div>" +
+      '<div class="tile-meta"><span>lane ' + esc(c.lane) + "</span>" +
+      "<span>owner " + esc(c.owner || "—") + "</span>" +
+      "<span>pri " + esc(c.priority) + "</span>" +
+      "<span>" + esc(c.plan || "unassigned") + "</span>" + deps + "</div></div>";
+  }).join("") || '<div class="empty">no cards match the filters</div>';
+  document.querySelectorAll(".tile").forEach(t =>
+    t.addEventListener("click", () => openReasoning(t.dataset.card)));
+
+  // running now
+  if (data.running.length) {
+    $("running").innerHTML = data.running.map(c =>
+      '<div class="running-item"><span><span class="rid">' + esc(c.id) + "</span> " +
+      '<span class="rtt">' + esc(c.title) + "</span><br>" +
+      '<span class="rtt">' + esc(c.status) + " · " +
+      (c.tmux_live ? '<span class="live-dot">● tmux live</span>' : '<span class="dead-dot">○ no tmux</span>') +
+      '</span></span><button class="watch" data-card="' + esc(c.id) + '">watch</button></div>'
+    ).join("");
+  } else {
+    $("running").innerHTML = '<div class="empty">nothing running</div>';
+  }
+  document.querySelectorAll("button.watch").forEach(b =>
+    b.addEventListener("click", (e) => { e.stopPropagation(); openReasoning(b.dataset.card); }));
+
+  // lanes
+  $("lanes").innerHTML = Object.entries(data.lanes).sort().map(([lane, l]) =>
+    '<span class="chip"><b>' + esc(lane) + "</b> " + l.active + " active / " + l.total + " total</span>"
+  ).join("") || '<div class="empty">no lanes</div>';
+
+  // stale locks
+  if (data.stale_locks && data.stale_locks.length) {
+    $("lanes").innerHTML += '<div style="margin-top:8px" class="rework">stale locks: ' +
+      esc(data.stale_locks.map(s => s.card + " (" + s.age_minutes + "m)").join(", ")) + "</div>";
+  }
+}
+
+function renderFeed(data) {
+  fillSelect($("f-feed-plan"), data.plans, "plan");
+  const entries = data.entries.filter(e => !filters.feedPlan || e.plan === filters.feedPlan);
+  $("feed-count").textContent = entries.length + " entries";
+  $("feed").innerHTML = entries.slice(0, 200).map(e =>
+    '<div class="entry"><span class="ts">' + esc(fmtTs(e.timestamp)) + "</span>" +
+    '<span class="pl">' + esc(e.plan) + "</span>" +
+    '<div class="tx">' + esc(e.text) + "</div></div>"
+  ).join("") || '<div class="empty">no log entries</div>';
+}
+
+async function openReasoning(card) {
+  openCard = card;
+  $("overlay").classList.add("open");
+  await refreshModal();
+}
+
+async function refreshModal() {
+  if (!openCard) return;
+  const d = await j("/api/activity?card=" + encodeURIComponent(openCard));
+  if (d.error) { closeModal(); return; }
+  $("m-id").textContent = d.card;
+  $("m-state").textContent = d.state === "live"
+    ? "session " + d.session + " — live tail (refreshes with board)"
+    : "session " + d.session + " — " + (d.state || "no session");
+  $("m-tail").textContent = d.tail || "(no output)";
+  $("m-result").textContent = d.result || "(Result section empty)";
+}
+
+function closeModal() { openCard = null; $("overlay").classList.remove("open"); }
+
+$("m-close").addEventListener("click", closeModal);
+$("overlay").addEventListener("click", (e) => { if (e.target === $("overlay")) closeModal(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+$("f-lane").addEventListener("change", (e) => { filters.lane = e.target.value; if (lastStatus) renderStatus(lastStatus); });
+$("f-status").addEventListener("change", (e) => { filters.status = e.target.value; if (lastStatus) renderStatus(lastStatus); });
+$("f-plan").addEventListener("change", (e) => { filters.plan = e.target.value; if (lastStatus) renderStatus(lastStatus); });
+$("f-feed-plan").addEventListener("change", (e) => { filters.feedPlan = e.target.value; refresh(); });
+
+async function refresh() {
+  try {
+    const [s, l] = await Promise.all([j("/api/status"), j("/api/log")]);
+    renderStatus(s);
+    renderFeed(l);
+    if (openCard) refreshModal();
+  } catch (e) {
+    $("updated").textContent = "server unreachable — retrying";
+  }
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
