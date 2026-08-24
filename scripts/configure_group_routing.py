@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-"""configure_group_routing.py — enforce PROTOCOL.md §11.
+"""configure_group_routing.py — enforce PROTOCOL.md §10.
 
 Set/verify group routing on every Bot Hive profile:
 
   atlas        require_mention: false, exclusive_bot_mentions: true
   lane bots    require_mention: true,  exclusive_bot_mentions: true
+
+Profiles root: env HERMES_PROFILES_ROOT, else the real user home via
+pwd.getpwuid (immune to desktop sessions whose Path.home() is a phantom
+profile dir). A missing/unreadable profile config is FATAL — a vacuous
+PASS is a bug. exit 0 only when every hive profile was checked and none
+drifted.
 
 Stdlib only. Non-destructive by default: run `--check` to see drift,
 run with `--apply` to write it.
@@ -15,17 +21,27 @@ Usage:
 """
 import argparse
 import os
+import pwd
 import sys
 from pathlib import Path
 
-HOME = Path.home()
-PROFILES = HOME / ".hermes" / "profiles"
+REAL_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
+PROFILES = Path(os.environ.get("HERMES_PROFILES_ROOT",
+                               REAL_HOME / ".hermes" / "profiles"))
 ORCHESTRATOR = "atlas"
 LANE_BOTS = ["scout", "forge", "quill", "audit", "data"]
 ALL_BOTS = [ORCHESTRATOR] + LANE_BOTS
 
 # Hard design limit (PROTOCOL.md §1): atlas + 5 lanes.
 MAX_BOTS = 6
+
+# Known platform sections that carry group-routing keys in Hermes config.yaml.
+PLATFORM_BASES = [
+    "telegram", "discord", "slack", "signal", "mattermost", "matrix",
+    "wecom", "bluebubbles", "buzz", "photon",
+]
+# Keys asserted on every present platform section.
+ROUTING_KEYS = ["require_mention", "exclusive_bot_mentions"]
 
 
 def assert_cap():
@@ -35,30 +51,10 @@ def assert_cap():
               file=sys.stderr)
         sys.exit(1)
 
-# Platform keys that carry require_mention in Hermes config.yaml.
-# Telegram/Discord/Slack/etc. all expose it at the platform level.
-PLATFORM_KEYS = [
-    "telegram.require_mention",
-    "discord.require_mention",
-    "slack.require_mention",
-    "signal.require_mention",
-    "mattermost.require_mention",
-    "matrix.require_mention",
-    "wecom.require_mention",
-    "bluebubbles.require_mention",
-    "buzz.require_mention",
-    "photon.require_mention",
-]
-# exclusive_bot_mentions gates mention routing; default true in Hermes,
-# but we assert it where the platform exposes it.
-EXCLUSIVE_KEYS = [
-    "telegram.exclusive_bot_mentions",
-]
-
 
 def config_path(profile: str) -> Path:
     if profile == "default":
-        return HOME / ".hermes" / "config.yaml"
+        return REAL_HOME / ".hermes" / "config.yaml"
     return PROFILES / profile / "config.yaml"
 
 
@@ -93,32 +89,38 @@ def get_key(cfg: dict, key: str):
 
 
 def set_key_in_file(path: Path, base: str, key: str, value: str):
-    """Set base.key = value, preserving file structure. Stdlib only."""
+    """Set base.key = value, preserving file structure. Stdlib only.
+
+    Rewrites an existing `key:` line inside the section, or inserts one
+    at the end of the section when missing (never at end of file).
+    """
     lines = path.read_text().splitlines(keepends=True)
-    out = []
+    key_line = None
+    insert_at = None
     in_section = False
-    section_written = False
-    for line in lines:
+    for i, line in enumerate(lines):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
-            out.append(line)
             continue
         indent = len(line) - len(line.lstrip(" "))
         if indent == 0 and ":" in stripped:
-            section = stripped.split(":", 1)[0].strip()
-            in_section = section == base
-            out.append(line)
+            name = stripped.split(":", 1)[0].strip()
+            if in_section:
+                insert_at = i  # section ended: insert before next top-level
+                break
+            in_section = (name == base)
             continue
         if in_section and indent == 2 and stripped.split(":", 1)[0].strip() == key:
-            out.append(f"  {key}: {value}\n")
-            section_written = True
-            continue
-        out.append(line)
-    if in_section and not section_written:
-        # section exists but key missing — append under it
-        out.append(f"  {key}: {value}\n")
-    text = "".join(out)
-    path.write_text(text)
+            key_line = i
+            break
+    if key_line is not None:
+        lines[key_line] = f"  {key}: {value}\n"
+    elif insert_at is not None:
+        lines.insert(insert_at, f"  {key}: {value}\n")
+    elif in_section:
+        lines.append(f"  {key}: {value}\n")
+    # else: section not found — caller only invokes this for present sections.
+    path.write_text("".join(lines))
 
 
 def main():
@@ -133,46 +135,55 @@ def main():
 
     assert_cap()
 
+    profiles = [p for p in ALL_BOTS if not args.profile or p == args.profile]
     changed = []
-    for profile in ALL_BOTS:
-        if args.profile and profile != args.profile:
-            continue
+    checked = 0
+    for profile in profiles:
         path = config_path(profile)
         if not path.exists():
-            print(f"SKIP {profile}: no config at {path}")
-            continue
-        want_mention = "false" if profile == ORCHESTRATOR else "true"
-        cfg = read_config(path)
-        for key in PLATFORM_KEYS + EXCLUSIVE_KEYS:
-            base, sub = key.split(".", 1)
-            val = get_key(cfg, key)
-            if val is None:
-                # platform not configured -> nothing to set
-                continue
-            if sub == "require_mention":
-                want = want_mention
-            elif sub == "exclusive_bot_mentions":
-                want = "true"
-            else:
-                continue
-            if val.lower() not in ("true", "false"):
-                continue  # odd value; don't touch
-            if val.lower() != want:
-                changed.append((profile, key, val, want))
-                if args.apply:
-                    set_key_in_file(path, base, sub, want)
-                    print(f"APPLIED {profile}: {key} {val} -> {want}")
-    if not args.apply:
-        if changed:
-            print("DRIFT (run with --apply):")
-            for profile, key, val, want in changed:
-                print(f"  {profile}: {key} = {val}, want {want}")
+            print(f"FATAL: {profile}: no config at {path} "
+                  f"(checked {checked}/{len(profiles)} profiles)",
+                  file=sys.stderr)
             sys.exit(1)
-        print("group routing: PASS (all profiles in spec)")
-        sys.exit(0)
-    if args.apply and not changed:
-        print("group routing: PASS (already in spec)")
-    sys.exit(0 if not changed else 0)
+        cfg = read_config(path)
+        sections = [b for b in PLATFORM_BASES if "_" + b in cfg]
+        want_mention = "false" if profile == ORCHESTRATOR else "true"
+        profile_drift = 0
+        for base in sections:
+            for sub in ROUTING_KEYS:
+                want = want_mention if sub == "require_mention" else "true"
+                val = get_key(cfg, f"{base}.{sub}")
+                if val is None:
+                    changed.append((profile, f"{base}.{sub}", "<missing>", want))
+                    profile_drift += 1
+                    if args.apply:
+                        set_key_in_file(path, base, sub, want)
+                        print(f"APPLIED {profile}: {base}.{sub} <missing> -> {want}")
+                    continue
+                if val.lower() not in ("true", "false"):
+                    continue  # odd value; don't touch
+                if val.lower() != want:
+                    changed.append((profile, f"{base}.{sub}", val, want))
+                    profile_drift += 1
+                    if args.apply:
+                        set_key_in_file(path, base, sub, want)
+                        print(f"APPLIED {profile}: {base}.{sub} {val} -> {want}")
+        checked += 1
+        print(f"{profile}: {len(sections)} platform section(s) checked, "
+              f"{profile_drift} drift")
+
+    if checked == 0:
+        print("FATAL: no profiles checked", file=sys.stderr)
+        sys.exit(1)
+
+    if changed and not args.apply:
+        print("DRIFT (run with --apply):")
+        for profile, key, val, want in changed:
+            print(f"  {profile}: {key} = {val}, want {want}")
+        sys.exit(1)
+
+    print(f"group routing: PASS ({checked} profile(s) checked, 0 drift)")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
