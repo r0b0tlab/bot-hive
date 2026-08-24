@@ -33,12 +33,13 @@ hermes profile create atlas --clone
 hermes -p atlas config set model.default deepseek-v4-flash-vision-exp
 hermes -p atlas config set model.provider deepseek
 hermes -p atlas config set agent.reasoning_effort xhigh
-cp souls/atlas.md ~/.hermes/profiles/atlas/SOUL.md
+# souls/*.md are wrapped (header line + ``` fence). Stage the unwrapped body:
+sed '1,3d;$d' souls/atlas.md > ~/.hermes/profiles/atlas/SOUL.md
 
 # 3. Lane bots (one profile per lane, SOUL.md staged from souls/)
 for bot in scout forge quill audit data; do
   hermes profile create $bot --clone
-  cp souls/$bot.md ~/.hermes/profiles/$bot/SOUL.md
+  sed '1,3d;$d' souls/$bot.md > ~/.hermes/profiles/$bot/SOUL.md
 done
 
 # 4. Group routing: first message in a bot group goes to atlas
@@ -76,7 +77,8 @@ Full contract: `PROTOCOL.md`. Cross-agent guide: `AGENTS.md`.
 The roster is capped at 6 bots (atlas + 5 lanes). Adding one:
 1. Retire a lane first (delete its row/profile/SOUL — nothing half-retired).
 2. Add a row to `PROTOCOL.md` §1 (lane, profile, scope).
-3. Write `souls/<lane>.md`; stage to `~/.hermes/profiles/<lane>/SOUL.md`.
+3. Write `souls/<lane>.md`; stage the unwrapped body (strip the
+   `# souls/<lane>.md` header + ``` fence) to `~/.hermes/profiles/<lane>/SOUL.md`.
 4. `hermes profile create <lane> --clone`.
 5. Add the lane to `scripts/configure_group_routing.py` LANE_BOTS.
 6. `python3 scripts/configure_group_routing.py --check` must exit 0
@@ -85,7 +87,7 @@ No other code changes. Any request class without a lane becomes a lane —
 the orchestrator never does the work itself. And quill absorbs content
 work of any medium: prose, images, video, audio.
 
-## Group routing (PROTOCOL.md §11)
+## Group routing (PROTOCOL.md §10)
 
 In a group chat with several Hive bots, atlas is the default responder:
 `atlas.require_mention: false` answers every unaddressed message, so the

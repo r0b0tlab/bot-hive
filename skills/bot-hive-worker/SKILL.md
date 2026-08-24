@@ -23,7 +23,7 @@ this file.
 - You need to claim, execute, or hand off a Bot Hive card.
 - Don't use for: orchestrating, verifying, or working another lane's card.
 
-## Group behavior (PROTOCOL.md §11 + dispatch)
+## Group behavior (PROTOCOL.md §10 + dispatch)
 
 - Your profile has `require_mention: true`: in groups you answer only
   when @-mentioned or replying to your own message. You never open

@@ -29,7 +29,7 @@ atlas, never a lane bot.
 - Don't use for: single answers you can give directly. Answering IS
   executing; if the work is yours to do, it is not a hive task.
 
-## Group routing (PROTOCOL.md §11)
+## Group routing (PROTOCOL.md §10)
 
 - `atlas.require_mention: false` (all platforms) — atlas answers every
   unaddressed group message; the first message in a bot group lands on

@@ -31,14 +31,14 @@ verdict. The orchestrator never executes work itself.
    `hive.py`; it must exit 0.
 6. New lane = new row in PROTOCOL.md §1 + new profile + new
    `souls/<lane>.md`. Do not reuse an existing bot for a new lane.
-7. All team activity happens in the desktop group chat (PROTOCOL.md §8).
+7. All team activity happens in the desktop group chat (PROTOCOL.md §7).
    Atlas never spawns tmux or `hermes -p` for lane work — it addresses a
    bot in the room and the desktop routes the work order to that bot's
    group session.
 8. `logs/<plan>.md` is the rolling project log: hive.py writes every
    status change and check-in; atlas writes the narrative. Append-only,
    one file per plan.
-9. Group routing (PROTOCOL.md §11): atlas is the group entry point
+9. Group routing (PROTOCOL.md §10): atlas is the group entry point
    (`require_mention: false`); lane bots answer only when @-mentioned
    (`require_mention: true`). `scripts/configure_group_routing.py --check`
    must exit 0 before committing profile/group changes.
