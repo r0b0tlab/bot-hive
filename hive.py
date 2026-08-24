@@ -183,6 +183,53 @@ def waiting_deps(lane: str = "", status: str = "") -> str:
     return f"waiting on deps: {'; '.join(lines)}" if lines else ""
 
 
+def validate_card(meta: dict) -> list:
+    """Return the card-structure pieces that are missing or malformed.
+
+    Checked: Objective, Spec (with Do:/Do not: lists), Acceptance
+    criteria, Artifact contract, and Result with all four boilerplate
+    keys (T-0021; guards the T-0019 authoring gap).
+    """
+    text = meta["_path"].read_text()
+    problems = []
+    for sec in ("Objective", "Spec", "Acceptance criteria", "Artifact contract",
+                "Result"):
+        if not re.search(rf"^##\s*{re.escape(sec)}\b", text, re.MULTILINE):
+            problems.append(f"## {sec}")
+    m = re.search(r"^##\s*Spec\b(.*?)(?=^##\s|\Z)", text, re.MULTILINE | re.DOTALL)
+    if m and not (re.search(r"^Do:", m.group(1), re.MULTILINE)
+                  and re.search(r"^Do not:", m.group(1), re.MULTILINE)):
+        problems.append("Spec Do:/Do not: lists")
+    m = re.search(r"^##\s*Result\b(.*?)(?=^##\s|\Z)", text, re.MULTILINE | re.DOTALL)
+    if m:
+        for key in ("Summary:", "Artifacts:", "Evidence:", "Caveats:"):
+            if not re.search(rf"^{re.escape(key)}", m.group(1), re.MULTILINE):
+                problems.append(f"Result {key}")
+    return problems
+
+
+def cmd_validate_cards(args):
+    """Validate card boilerplate on all cards (or one plan)."""
+    checked = 0
+    bad = 0
+    for path in sorted(BOARD.glob("T-*.md")):
+        meta = parse_card(path)
+        if args.plan and meta.get("plan") != args.plan:
+            continue
+        checked += 1
+        problems = validate_card(meta)
+        if problems:
+            bad += 1
+            print(f"{meta['id']}: incomplete card — missing: {', '.join(problems)}",
+                  file=sys.stderr)
+    if bad:
+        print(f"validate-cards: {bad} card(s) deficient of {checked}",
+              file=sys.stderr)
+        sys.exit(1)
+    print(f"validate-cards: PASS ({checked} card(s) checked)")
+    return 0
+
+
 def transition(meta: dict, target: str):
     src = meta.get("status", "draft")
     if target not in STATUSES.get(src, []):
@@ -245,12 +292,26 @@ Caveats:
 
 def cmd_plan(args):
     plan = args.plan
-    queued = 0
+    draft = []
     for path in sorted(BOARD.glob("T-*.md")):
         meta = parse_card(path)
         if meta.get("plan") == plan and meta.get("status") == "draft":
-            transition(meta, "queued")
-            queued += 1
+            draft.append(meta)
+    problems = []
+    for meta in draft:
+        p = validate_card(meta)
+        if p:
+            problems.append((meta["id"], p))
+    if problems:
+        for card_id, p in problems:
+            print(f"error: {card_id}: incomplete card — missing: "
+                  f"{', '.join(p)}; fix it before planning (create via "
+                  f"'hive new' for the boilerplate)", file=sys.stderr)
+        fail("plan aborted: draft card validation failed")
+    queued = 0
+    for meta in draft:
+        transition(meta, "queued")
+        queued += 1
     print(f"plan {plan}: {queued} card(s) queued")
     return 0
 
@@ -563,8 +624,25 @@ def selftest(args=None):
     transition(d5, "done")
     transition(d5, "verified")
     cmd_claim(types.SimpleNamespace(card="T-9996", lane="forge"))
+    # card-structure validation (T-0021)
+    def full_card(card_id: str):
+        m = {"id": card_id, "title": "full", "lane": "forge", "status": "draft",
+             "owner": "", "plan": "P-0000", "deps": [], "priority": 2,
+             "attempts": 0, "created": now_iso()}
+        p = BOARD / f"{card_id}.md"
+        p.write_text(render_fm(m) + (
+            "\n## Objective\nx\n## Spec\nDo:\n- x\n\nDo not:\n- y\n"
+            "## Acceptance criteria\n- [ ] c\n## Artifact contract\nx\n"
+            "## Result\n(filled at `hive done`)\nSummary: \n"
+            "Artifacts: \nEvidence: \nCaveats: \n"))
+        return p
+    p_full = full_card("T-9994")
+    assert validate_card(parse_card(p_full)) == [], \
+        "complete card failed boilerplate validation"
+    assert "## Result" in validate_card(parse_card(BOARD / "T-9998.md")), \
+        "Result deficiency not detected"
     print("selftest: PASS (state machine + check-in + rolling log "
-          "+ done-Result enforcement + dep guard)")
+          "+ done-Result enforcement + dep guard + card boilerplate)")
     return 0
 
 
@@ -580,6 +658,7 @@ def main():
                           ("--deps", dict(nargs="+", default=[])),
                           ("--priority", dict(type=int, default=2))]),
         ("plan", cmd_plan, [("--plan", dict(required=True))]),
+        ("validate-cards", cmd_validate_cards, [("--plan", dict(default=""))]),
         ("list", cmd_list, [("--lane", dict()), ("--status", dict())]),
         ("claim", cmd_claim, [("card", dict()), ("--lane", dict(default=""))]),
         ("start", cmd_start, [("card", dict())]),
@@ -604,7 +683,8 @@ def main():
             p.add_argument(argname, **spec)
     args = ap.parse_args()
     fn = {
-        "new": cmd_new, "plan": cmd_plan, "list": cmd_list, "claim": cmd_claim,
+        "new": cmd_new, "plan": cmd_plan, "validate-cards": cmd_validate_cards,
+        "list": cmd_list, "claim": cmd_claim,
         "start": cmd_start, "done": cmd_done, "verify": cmd_verify,
         "close": cmd_close, "block": cmd_block, "release": cmd_release,
         "checkin": cmd_checkin, "log": cmd_log, "status": cmd_status,
