@@ -13,7 +13,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO = Path(os.environ.get("BOT_HIVE", Path.home() / "bot-hive"))
+REPO = Path(os.environ.get("BOT_HIVE", Path(__file__).resolve().parent))
 BOARD = REPO / "board"
 LOCKS = BOARD / ".locks"
 DOCS = REPO / "docs"
@@ -63,6 +63,22 @@ def auto_log(meta: dict, event: str):
 def fail(msg, code=1):
     print(f"error: {msg}", file=sys.stderr)
     sys.exit(code)
+
+
+def require_board(cmd: str):
+    """Hard-fail when the repo or board is missing instead of silently
+    operating on an empty one (e.g. a phantom-HOME session)."""
+    if not REPO.is_dir():
+        fail(f"{cmd}: hive repo not found: {REPO} — set BOT_HIVE to the repo "
+             f"or run from inside it")
+    if not BOARD.is_dir():
+        fail(f"{cmd}: hive board not found: {BOARD} — set BOT_HIVE to the repo "
+             f"or run from inside it")
+
+
+# Commands that operate on the board (guarded by require_board).
+BOARD_CMDS = {"new", "plan", "list", "claim", "start", "done", "verify",
+              "close", "block", "release", "checkin", "log", "status", "show"}
 
 
 # ---------- frontmatter (tiny YAML subset: scalars + lists) ----------
@@ -275,10 +291,23 @@ def cmd_verify(args):
     return 0
 
 
+def remove_lock(card: str) -> bool:
+    """Delete a card's lock dir; shared by close and release."""
+    lock = LOCKS / card
+    if lock.exists():
+        import shutil
+        shutil.rmtree(lock)
+        return True
+    return False
+
+
 def cmd_close(args):
     meta = load_card(args.card)
     transition(meta, "closed")
-    print(f"{args.card} closed")
+    if remove_lock(args.card):
+        print(f"{args.card} closed (lock removed)")
+    else:
+        print(f"{args.card} closed")
     return 0
 
 
@@ -290,10 +319,7 @@ def cmd_block(args):
 
 
 def cmd_release(args):
-    lock = LOCKS / args.card
-    if lock.exists():
-        import shutil
-        shutil.rmtree(lock)
+    if remove_lock(args.card):
         print(f"{args.card} lock released")
     else:
         print(f"{args.card}: no lock")
@@ -464,9 +490,8 @@ def main():
         "show": cmd_status, "dashboard": cmd_dashboard,
         "selftest": selftest,
     }[args.cmd]
-    if not BOARD.exists():
-        BOARD.mkdir(parents=True, exist_ok=True)
-        LOCKS.mkdir(exist_ok=True)
+    if args.cmd in BOARD_CMDS:
+        require_board(args.cmd)
     sys.exit(fn(args))
 
 
