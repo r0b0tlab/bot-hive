@@ -33,13 +33,17 @@ hermes profile create atlas --clone
 hermes -p atlas config set model.default deepseek-v4-flash-vision-exp
 hermes -p atlas config set model.provider deepseek
 hermes -p atlas config set agent.reasoning_effort xhigh
-# souls/*.md are wrapped (header line + ``` fence). Stage the unwrapped body:
-sed '1,3d;$d' souls/atlas.md > ~/.hermes/profiles/atlas/SOUL.md
+# souls/*.md are wrapped: line 1 = `# souls/<lane>.md`, line 3 = ```markdown
+# opener, and the closing ``` fence sits MID-FILE (before the Starter
+# guidance appendix) — so no 'cp' and no 'sed 1,3d;$d' (that eats the last
+# content line where the file has no trailing fence). Stage the unwrapped
+# body: drop lines 1-3 and every fence-only line wherever it sits:
+sed -n '4,$p' souls/atlas.md | grep -v '^```$' > ~/.hermes/profiles/atlas/SOUL.md
 
 # 3. Lane bots (one profile per lane, SOUL.md staged from souls/)
 for bot in scout forge quill audit data; do
   hermes profile create $bot --clone
-  sed '1,3d;$d' souls/$bot.md > ~/.hermes/profiles/$bot/SOUL.md
+  sed -n '4,$p' souls/$bot.md | grep -v '^```$' > ~/.hermes/profiles/$bot/SOUL.md
 done
 
 # 4. Group routing: first message in a bot group goes to atlas
@@ -77,8 +81,10 @@ Full contract: `PROTOCOL.md`. Cross-agent guide: `AGENTS.md`.
 The roster is capped at 6 bots (atlas + 5 lanes). Adding one:
 1. Retire a lane first (delete its row/profile/SOUL — nothing half-retired).
 2. Add a row to `PROTOCOL.md` §1 (lane, profile, scope).
-3. Write `souls/<lane>.md`; stage the unwrapped body (strip the
-   `# souls/<lane>.md` header + ``` fence) to `~/.hermes/profiles/<lane>/SOUL.md`.
+3. Write `souls/<lane>.md`; stage the unwrapped body — drop lines 1-3
+   (`# souls/<lane>.md` header, blank, ```markdown opener) and every
+   fence-only line wherever it sits, keeping all content incl. the
+   Starter guidance bullets — to `~/.hermes/profiles/<lane>/SOUL.md`.
 4. `hermes profile create <lane> --clone`.
 5. Add the lane to `scripts/configure_group_routing.py` LANE_BOTS.
 6. `python3 scripts/configure_group_routing.py --check` must exit 0
