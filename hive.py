@@ -209,19 +209,34 @@ def validate_card(meta: dict) -> list:
 
 
 def cmd_validate_cards(args):
-    """Validate card boilerplate on all cards (or one plan)."""
+    """Validate card boilerplate on all cards (or one plan).
+
+    Default scans every card; deficiencies on CLOSED cards are
+    informational only (they cannot be queued again) and do not fail the
+    run. --drafts-only skips everything except drafts (plan-gate
+    contract; keeps legacy closed cards out of the noise).
+    """
     checked = 0
     bad = 0
+    info = []
     for path in sorted(BOARD.glob("T-*.md")):
         meta = parse_card(path)
         if args.plan and meta.get("plan") != args.plan:
             continue
+        if args.drafts_only and meta.get("status") != "draft":
+            continue
         checked += 1
         problems = validate_card(meta)
         if problems:
+            if meta.get("status") == "closed":
+                info.append(f"{meta['id']}: informational — missing: "
+                            f"{', '.join(problems)}")
+                continue
             bad += 1
             print(f"{meta['id']}: incomplete card — missing: {', '.join(problems)}",
                   file=sys.stderr)
+    for line in info:
+        print(line)
     if bad:
         print(f"validate-cards: {bad} card(s) deficient of {checked}",
               file=sys.stderr)
@@ -428,6 +443,28 @@ def cmd_block(args):
     meta = load_card(args.card)
     transition(meta, "blocked")
     print(f"{args.card} blocked: {args.reason}")
+    return 0
+
+
+def cmd_unblock(args):
+    """blocked -> queued, card owner or atlas only (T-0022).
+
+    The lock is removed with the unblock: a queued card holds no lock,
+    and the next claim creates a fresh one.
+    """
+    meta = load_card(args.card)
+    caller = args.lane or ""
+    if caller not in (meta.get("owner"), "atlas"):
+        fail(f"{args.card}: unblock allowed only for the owner "
+             f"({meta.get('owner') or 'unset'}) or atlas — got "
+             f"'{caller or '<no --lane>'}'")
+    if meta.get("status") != "blocked":
+        fail(f"{args.card}: only blocked cards can be unblocked "
+             f"(current: {meta.get('status')})")
+    transition(meta, "queued")
+    removed = remove_lock(args.card)
+    print(f"{args.card} unblocked -> queued"
+          + (" (lock removed)" if removed else ""))
     return 0
 
 
@@ -641,8 +678,39 @@ def selftest(args=None):
         "complete card failed boilerplate validation"
     assert "## Result" in validate_card(parse_card(BOARD / "T-9998.md")), \
         "Result deficiency not detected"
+    # unblock + drafts-only (T-0022)
+    def mk_blocked(card_id: str, owner: str):
+        m = {"id": card_id, "title": "blocked-test", "lane": "forge",
+             "status": "blocked", "owner": owner, "plan": "P-0000", "deps": [],
+             "priority": 2, "attempts": 0, "created": now_iso()}
+        p = BOARD / f"{card_id}.md"
+        p.write_text(render_fm(m) + (
+            "\n## Objective\nx\n## Spec\nDo:\n- x\n\nDo not:\n- y\n"
+            "## Acceptance criteria\n- [ ] c\n## Artifact contract\nx\n"
+            "## Result\n(filled at `hive done`)\nSummary: \n"
+            "Artifacts: \nEvidence: \nCaveats: \n"))
+        m["_path"] = p
+        return p
+    p_blocked = mk_blocked("T-9993", "forge")
+    (LOCKS / "T-9993").mkdir(exist_ok=True)
+    try:
+        cmd_unblock(types.SimpleNamespace(card="T-9993", lane="scout"))
+        assert False, "non-owner unblock accepted"
+    except SystemExit:
+        pass
+    assert parse_card(p_blocked).get("status") == "blocked", \
+        "wrong unblock caller changed state"
+    cmd_unblock(types.SimpleNamespace(card="T-9993", lane="forge"))
+    assert parse_card(p_blocked).get("status") == "queued", \
+        "owner unblock did not reach queued"
+    assert not (LOCKS / "T-9993").exists(), "unblock left a stale lock"
+    buf2 = io.StringIO()
+    with contextlib.redirect_stdout(buf2):
+        cmd_validate_cards(types.SimpleNamespace(plan="", drafts_only=True))
+    assert "PASS" in buf2.getvalue(), "drafts-only run should PASS"
     print("selftest: PASS (state machine + check-in + rolling log "
-          "+ done-Result enforcement + dep guard + card boilerplate)")
+          "+ done-Result enforcement + dep guard + card boilerplate "
+          "+ unblock/drafts-only)")
     return 0
 
 
@@ -658,7 +726,11 @@ def main():
                           ("--deps", dict(nargs="+", default=[])),
                           ("--priority", dict(type=int, default=2))]),
         ("plan", cmd_plan, [("--plan", dict(required=True))]),
-        ("validate-cards", cmd_validate_cards, [("--plan", dict(default=""))]),
+        ("validate-cards", cmd_validate_cards,
+         [("--plan", dict(default="")),
+          ("--drafts-only", dict(action="store_true"))]),
+        ("unblock", cmd_unblock, [("card", dict()),
+                                  ("--lane", dict(default=""))]),
         ("list", cmd_list, [("--lane", dict()), ("--status", dict())]),
         ("claim", cmd_claim, [("card", dict()), ("--lane", dict(default=""))]),
         ("start", cmd_start, [("card", dict())]),
@@ -684,7 +756,7 @@ def main():
     args = ap.parse_args()
     fn = {
         "new": cmd_new, "plan": cmd_plan, "validate-cards": cmd_validate_cards,
-        "list": cmd_list, "claim": cmd_claim,
+        "unblock": cmd_unblock, "list": cmd_list, "claim": cmd_claim,
         "start": cmd_start, "done": cmd_done, "verify": cmd_verify,
         "close": cmd_close, "block": cmd_block, "release": cmd_release,
         "checkin": cmd_checkin, "log": cmd_log, "status": cmd_status,
