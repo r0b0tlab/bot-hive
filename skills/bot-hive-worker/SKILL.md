@@ -12,7 +12,7 @@ metadata:
 
 # Bot Hive — Worker Protocol
 
-Lane bots (scout, forge, quill, audit, media, data) accept one card, do
+Lane bots (scout, forge, quill, audit, data) accept one card, do
 exactly its Spec, fill the Result, and hand off. Lane identity and
 per-lane rules live in the bot's SOUL.md, which wins on conflict with
 this file.

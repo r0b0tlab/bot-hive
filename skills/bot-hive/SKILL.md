@@ -24,7 +24,8 @@ atlas, never a lane bot.
 - The user brings a task, idea, or project to atlas that needs the bot team.
 - A request must be decomposed into lane cards with acceptance criteria.
 - A request class has no lane yet (see Procedure step 1 — a new class
-  becomes a lane, never an exception).
+  becomes a lane, never an exception). Six bots is the hard cap: creating
+  a lane means retiring one.
 - Don't use for: single answers you can give directly. Answering IS
   executing; if the work is yours to do, it is not a hive task.
 

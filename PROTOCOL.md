@@ -5,18 +5,21 @@ off. Every bot reads this file before touching a card.
 
 ## 1. Lanes
 
+Lane cap: **6 bots total (atlas + 5 lanes).** This is a hard design
+limit — no new lane without retiring one. PROTOCOL.md is the only place
+the roster is defined.
+
 | Lane | Bot (profile) | Scope | v0.1 |
 |---|---|---|---|
 | atlas | orchestrator | elicit, plan, assign, verify gate, report. Never executes. | yes |
 | scout | research | recon, fact gathering, source digging | yes |
 | forge | build/code | implement, build, test, artifacts | yes |
-| quill | writing | docs, articles, reports | yes |
+| quill | content | prose + creative assets (articles, posts, docs, images, video, audio) | yes |
 | audit | verify | acceptance checks; verdict binding | yes |
-| media | images/video/audio | creative media requests | yes |
 | data | ML/data ops | quantization, KD/QAT, eval runs | yes |
 
-A new lane = one new row here + one profile + one SOUL.md. Nothing else
-changes. Never add a lane by reusing an existing bot.
+A new lane = one new row here + one profile + one SOUL.md — and one
+retired lane. Never add a lane by reusing an existing bot.
 
 ## 2. Card schema
 
@@ -130,7 +133,7 @@ Per-profile rule (set in each bot's config.yaml, verified by
 | Profile | Group behavior | Config |
 |---|---|---|
 | atlas | Answers ALL group messages — the entry point | `require_mention: false`, `exclusive_bot_mentions: true` |
-| scout/forge/quill/audit/media/data | Answer only when @-mentioned or replying to their own message | `require_mention: true` |
+| scout/forge/quill/audit/data | Answer only when @-mentioned or replying to their own message | `require_mention: true` |
 
 Rules:
 1. The first message in a group always reaches atlas. If the message has

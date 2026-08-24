@@ -21,8 +21,19 @@ from pathlib import Path
 HOME = Path.home()
 PROFILES = HOME / ".hermes" / "profiles"
 ORCHESTRATOR = "atlas"
-LANE_BOTS = ["scout", "forge", "quill", "audit", "media", "data"]
+LANE_BOTS = ["scout", "forge", "quill", "audit", "data"]
 ALL_BOTS = [ORCHESTRATOR] + LANE_BOTS
+
+# Hard design limit (PROTOCOL.md §1): atlas + 5 lanes.
+MAX_BOTS = 6
+
+
+def assert_cap():
+    if len(ALL_BOTS) > MAX_BOTS:
+        print(f"FATAL: {len(ALL_BOTS)} bots > cap {MAX_BOTS} "
+              f"(PROTOCOL.md §1). Retire a lane before adding one.",
+              file=sys.stderr)
+        sys.exit(1)
 
 # Platform keys that carry require_mention in Hermes config.yaml.
 # Telegram/Discord/Slack/etc. all expose it at the platform level.
@@ -119,6 +130,8 @@ def main():
 
     if not args.check and not args.apply:
         args.check = True  # default = check
+
+    assert_cap()
 
     changed = []
     for profile in ALL_BOTS:
