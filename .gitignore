@@ -1,0 +1,7 @@
+# runtime state — not source
+board/.locks/
+board/T-*.md
+logs/
+docs/failures.md
+__pycache__/
+*.pyc
