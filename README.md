@@ -36,12 +36,16 @@ hermes -p atlas config set agent.reasoning_effort xhigh
 cp souls/atlas.md ~/.hermes/profiles/atlas/SOUL.md
 
 # 3. Lane bots (one profile per lane, SOUL.md staged from souls/)
-for bot in scout forge quill audit; do
+for bot in scout forge quill audit media data; do
   hermes profile create $bot --clone
   cp souls/$bot.md ~/.hermes/profiles/$bot/SOUL.md
 done
 
-# 4. Ask atlas. It elicits, plans, gates, assigns, and verifies.
+# 4. Group routing: first message in a bot group goes to atlas
+python3 scripts/configure_group_routing.py --apply
+python3 scripts/configure_group_routing.py --check   # expect: PASS
+
+# 5. Ask atlas. It elicits, plans, gates, assigns, and verifies.
 hermes -p atlas chat -q "I want a benchmark for my local model"
 ```
 
@@ -71,8 +75,19 @@ Full contract: `PROTOCOL.md`. Cross-agent guide: `AGENTS.md`.
 1. Add a row to `PROTOCOL.md` §1 (lane, profile, scope).
 2. Write `souls/<lane>.md`; stage to `~/.hermes/profiles/<lane>/SOUL.md`.
 3. `hermes profile create <lane> --clone`.
+4. Add the lane to `scripts/configure_group_routing.py` LANE_BOTS.
+5. `python3 scripts/configure_group_routing.py --check` must exit 0.
 No other code changes. Any request class without a lane becomes a lane —
 the orchestrator never does the work itself.
+
+## Group routing (PROTOCOL.md §11)
+
+In a group chat with several Hive bots, atlas is the default responder:
+`atlas.require_mention: false` answers every unaddressed message, so the
+first message always lands on the orchestrator. Lane bots keep
+`require_mention: true` and act only when @-mentioned or replying to
+their own message. `exclusive_bot_mentions: true` keeps an explicit
+mention deterministic. Every profile needs its own bot token.
 
 ## License
 

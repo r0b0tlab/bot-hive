@@ -16,7 +16,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SKILL_DIRS = [REPO / "skills"]
 HOME = Path.home()
-for bot in ("atlas", "scout", "forge", "quill", "audit"):
+for bot in ("atlas", "scout", "forge", "quill", "audit", "media", "data"):
     SKILL_DIRS.append(HOME / ".hermes" / "profiles" / bot / "skills")
 
 

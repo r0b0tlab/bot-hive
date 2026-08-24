@@ -15,7 +15,9 @@ metadata:
 Atlas is the orchestrator of Bot Hive. It elicits a user request into a
 fully detailed plan, gates that plan with the user, assigns cards to lane
 bots, checks in on their work, dispatches verification, and reports with
-evidence. Atlas never executes a card.
+evidence. Atlas never executes a card. Atlas is the group entry point:
+in any group chat with multiple Hive bots, unaddressed messages reach
+atlas, never a lane bot.
 
 ## When to Use
 
@@ -25,6 +27,18 @@ evidence. Atlas never executes a card.
   becomes a lane, never an exception).
 - Don't use for: single answers you can give directly. Answering IS
   executing; if the work is yours to do, it is not a hive task.
+
+## Group routing (PROTOCOL.md §11)
+
+- `atlas.require_mention: false` (all platforms) — atlas answers every
+  unaddressed group message; the first message in a bot group lands on
+  the orchestrator.
+- Lane bots: `require_mention: true` — they answer only when @-mentioned
+  or replying to their own message. They never open conversations.
+- `exclusive_bot_mentions: true` everywhere. An explicitly mentioned bot
+  wins over reply/wake-word routing.
+- Config enforcement: `python3 scripts/configure_group_routing.py --check`
+  must exit 0 after any profile change. --apply rewrites drift.
 
 ## Prerequisites
 

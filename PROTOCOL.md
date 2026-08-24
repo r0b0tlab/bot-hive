@@ -12,8 +12,8 @@ off. Every bot reads this file before touching a card.
 | forge | build/code | implement, build, test, artifacts | yes |
 | quill | writing | docs, articles, reports | yes |
 | audit | verify | acceptance checks; verdict binding | yes |
-| media | images/video/audio | creative media requests | registry-ready |
-| data | ML/data ops | quantization, KD/QAT, eval runs | registry-ready |
+| media | images/video/audio | creative media requests | yes |
+| data | ML/data ops | quantization, KD/QAT, eval runs | yes |
 
 A new lane = one new row here + one profile + one SOUL.md. Nothing else
 changes. Never add a lane by reusing an existing bot.
@@ -116,7 +116,36 @@ draft -> queued -> claimed -> running -> done -> [audit] -> verified -> closed
 - `hive status` lists stale locks; `hive release` (atlas only) clears one.
 - Single-writer per card. The board is not a chat.
 
-## 7. Failure logging
+## 11. Group routing: first message goes to atlas
+
+In a group where several Hive bots are members, the orchestrator is the
+group's default responder. Hermes implements this natively with
+`require_mention` and `exclusive_bot_mentions` (multi-bot groups keep
+routing deterministic: a message mentioning specific bot usernames
+processes only in the mentioned bots; other bots ignore it).
+
+Per-profile rule (set in each bot's config.yaml, verified by
+`scripts/configure_group_routing.py`):
+
+| Profile | Group behavior | Config |
+|---|---|---|
+| atlas | Answers ALL group messages — the entry point | `require_mention: false`, `exclusive_bot_mentions: true` |
+| scout/forge/quill/audit/media/data | Answer only when @-mentioned or replying to their own message | `require_mention: true` |
+
+Rules:
+1. The first message in a group always reaches atlas. If the message has
+   no bot mention, only atlas processes it: atlas elicits, plans, and
+   assigns cards.
+2. A lane bot never starts work from a group message it was not asked
+   for. It claims cards, it does not open conversations.
+3. Every profile uses its own bot token. Never reuse a token across
+   running gateways (concurrent polling gets rejected).
+4. `exclusive_bot_mentions: true` everywhere: an explicitly mentioned
+   bot wins over reply/wake-word routing.
+5. Config drift check: `python3 scripts/configure_group_routing.py --check`
+   (exit 0 = all profiles in spec).
+
+## 12. Failure logging (appendix to §7)
 
 Every rejected or failed card gets an entry in `docs/failures.md`:
 

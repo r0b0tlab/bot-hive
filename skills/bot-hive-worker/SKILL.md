@@ -12,15 +12,25 @@ metadata:
 
 # Bot Hive — Worker Protocol
 
-Lane bots (scout, forge, quill, audit) accept one card, do exactly its
-Spec, fill the Result, and hand off. Lane identity and per-lane rules
-live in the bot's SOUL.md, which wins on conflict with this file.
+Lane bots (scout, forge, quill, audit, media, data) accept one card, do
+exactly its Spec, fill the Result, and hand off. Lane identity and
+per-lane rules live in the bot's SOUL.md, which wins on conflict with
+this file.
 
 ## When to Use
 
 - Atlas spawned you with a work order naming a card (T-xxxx).
 - You need to claim, execute, or hand off a Bot Hive card.
 - Don't use for: orchestrating, verifying, or working another lane's card.
+
+## Group behavior (PROTOCOL.md §11)
+
+- Your profile has `require_mention: true`: in groups you answer only
+  when @-mentioned or replying to your own message. You never open
+  conversations and never act on unaddressed group chatter — that is
+  atlas's job.
+- First message always goes to atlas. You are a worker, not an entry
+  point.
 
 ## Prerequisites
 

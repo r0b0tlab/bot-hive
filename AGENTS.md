@@ -37,6 +37,10 @@ verdict. The orchestrator never executes work itself.
 8. `logs/<plan>.md` is the rolling project log: hive.py writes every
    status change and check-in; atlas writes the narrative. Append-only,
    one file per plan.
+9. Group routing (PROTOCOL.md §11): atlas is the group entry point
+   (`require_mention: false`); lane bots answer only when @-mentioned
+   (`require_mention: true`). `scripts/configure_group_routing.py --check`
+   must exit 0 before committing profile/group changes.
 
 ## Commands
 
