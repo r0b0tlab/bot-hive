@@ -1,8 +1,3 @@
-# PROTOCOL.md — Bot Hive v0.1 work contract
-
-The single source of truth for how work is accepted, executed, and handed
-off. Every bot reads this file before touching a card.
-
 ## 1. Lanes
 
 Lane cap: **6 bots total (atlas + 5 lanes).** This is a hard design
@@ -29,7 +24,7 @@ File: `board/<id>.md`. IDs are `T-0001` upward, allocated by `hive.py`.
 ---
 id: T-0001
 title: <one line>
-lane: forge            # scout | forge | quill | audit (the assignee)
+lane: forge            # scout | forge | quill | audit | data (the assignee)
 status: queued
 owner: ''              # profile name, set at claim time
 plan: P-0001
@@ -119,7 +114,73 @@ draft -> queued -> claimed -> running -> done -> [audit] -> verified -> closed
 - `hive status` lists stale locks; `hive release` (atlas only) clears one.
 - Single-writer per card. The board is not a chat.
 
-## 11. Group routing: first message goes to atlas
+## 7. Invocation — dispatch through the group chat
+
+All team activity happens in the desktop group chat (the room), never in
+detached tmux sessions or CLI one-shots. The room is the team's only
+work surface: assignments, progress, steers, and results are room
+messages so the user sees the team's actual work as it happens.
+
+Dispatch: atlas writes the assignment as a room message addressing the
+bot by handle ("@forge: claim and execute T-0003 — <one-line spec>").
+The desktop routes it into that bot's group session. The lane bot works
+in that session (its SOUL.md + worker skill apply) and reports in the
+room when done.
+
+Atlas never spawns `hermes -p` or tmux for lane work. If a card needs a
+bot that is not in the room, atlas flags it to the user — never works
+around the room.
+
+## 8. Check-in role (atlas steers the team)
+
+Atlas checks in on every `claimed`/`running` card every 60 seconds from
+claim time until the card is `done` or `failed`. In the group-chat model
+this means: read the room (`hive log` + the desktop's room log) and the
+board (`hive status`), and post a targeted steer message in the room
+addressing the bot by handle when a trigger fires.
+
+Steer triggers (any one fires a steer):
+- **Stuck:** no state change AND no new room/board activity since the
+  last check-in.
+- **Off task:** the bot is working on something not in the card's Spec or
+  outside its lane (scope drift, unrelated files, wrong deliverable).
+- **Misreading the plan:** output contradicts the acceptance criteria or
+  the original user request.
+
+Steer action: a room message, e.g. "@forge: T-0003 — you've been running
+3 min with no board movement. What's blocking? If the spec is unclear,
+`hive block` and report; do not guess."
+
+Escalation: two consecutive stuck check-ins → atlas `hive block` with the
+stuck reason and reports to the user. The card must not sit in a stuck
+`running` state silently.
+
+## 9. Rolling project log
+
+One human-readable running account per plan: `logs/<plan>.md`, appended
+for the life of the project. It is the story of the work, in plain
+language, and must be intelligible to a person who never watched the
+board.
+
+What appends to it:
+- **Automatic (hive.py):** every state transition, every check-in, every
+  action with a timestamp and actor.
+- **Atlas (narrative):** plan gate (plan approved), assignment decisions,
+  every steer with its reason, escalations, verification verdicts, and
+  the final report to the user.
+- **Lane bots:** a 1-3 line note at `done` (via `hive done`'s summary) and
+  any surprise or deviation discovered along the way.
+
+Log commands:
+```
+python3 hive.py checkin T-0001 --note "<what the bot is doing>"
+python3 hive.py log --plan P-0001            # read the log
+python3 hive.py log --plan P-0001 --entry "<narrative>"   # append (atlas)
+```
+
+Rules: one file per plan; never rewritten, only appended; every check-in
+and steer has a timestamp, an actor, and a reason.
+## 10. Group routing: first message goes to atlas
 
 In a group where several Hive bots are members, the orchestrator is the
 group's default responder. Hermes implements this natively with
@@ -148,7 +209,7 @@ Rules:
 5. Config drift check: `python3 scripts/configure_group_routing.py --check`
    (exit 0 = all profiles in spec).
 
-## 12. Failure logging (appendix to §7)
+## 11. Failure logging (appendix to §9)
 
 Every rejected or failed card gets an entry in `docs/failures.md`:
 
@@ -160,72 +221,6 @@ Root cause: <one line>
 Fix applied: <one line>
 ```
 
-Failures are also appended to the plan's rolling log (§10) with the
+Failures are also appended to the plan's rolling log (§9) with the
 rework round.
 
-## 8. Invocation — dispatch through the group chat
-
-All team activity happens in the desktop group chat (the room), never in
-detached tmux sessions or CLI one-shots. The room is the team's only
-work surface: assignments, progress, steers, and results are room
-messages so the user sees the team's actual work as it happens.
-
-Dispatch: atlas writes the assignment as a room message addressing the
-bot by handle ("@forge: claim and execute T-0003 — <one-line spec>").
-The desktop routes it into that bot's group session. The lane bot works
-in that session (its SOUL.md + worker skill apply) and reports in the
-room when done.
-
-Atlas never spawns `hermes -p` or tmux for lane work. If a card needs a
-bot that is not in the room, atlas flags it to the user — never works
-around the room.
-
-## 9. Check-in role (atlas steers the team)
-
-Atlas checks in on every `claimed`/`running` card every 60 seconds from
-claim time until the card is `done` or `failed`. In the group-chat model
-this means: read the room (`hive log` + the desktop's room log) and the
-board (`hive status`), and post a targeted steer message in the room
-addressing the bot by handle when a trigger fires.
-
-Steer triggers (any one fires a steer):
-- **Stuck:** no state change AND no new room/board activity since the
-  last check-in.
-- **Off task:** the bot is working on something not in the card's Spec or
-  outside its lane (scope drift, unrelated files, wrong deliverable).
-- **Misreading the plan:** output contradicts the acceptance criteria or
-  the original user request.
-
-Steer action: a room message, e.g. "@forge: T-0003 — you've been running
-3 min with no board movement. What's blocking? If the spec is unclear,
-`hive block` and report; do not guess."
-
-Escalation: two consecutive stuck check-ins → atlas `hive block` with the
-stuck reason and reports to the user. The card must not sit in a stuck
-`running` state silently.
-
-## 10. Rolling project log
-
-One human-readable running account per plan: `logs/<plan>.md`, appended
-for the life of the project. It is the story of the work, in plain
-language, and must be intelligible to a person who never watched the
-board.
-
-What appends to it:
-- **Automatic (hive.py):** every state transition, every check-in, every
-  action with a timestamp and actor.
-- **Atlas (narrative):** plan gate (plan approved), assignment decisions,
-  every steer with its reason, escalations, verification verdicts, and
-  the final report to the user.
-- **Lane bots:** a 1-3 line note at `done` (via `hive done`'s summary) and
-  any surprise or deviation discovered along the way.
-
-Log commands:
-```
-python3 hive.py checkin T-0001 --note "<what the bot is doing>"
-python3 hive.py log --plan P-0001            # read the log
-python3 hive.py log --plan P-0001 --entry "<narrative>"   # append (atlas)
-```
-
-Rules: one file per plan; never rewritten, only appended; every check-in
-and steer has a timestamp, an actor, and a reason.
