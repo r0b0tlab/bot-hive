@@ -369,12 +369,14 @@ def selftest(args=None):
     """Exercise the state machine against a throwaway REPO copy."""
     import shutil
     import tempfile
-    global BOARD, LOCKS
+    global BOARD, LOCKS, DOCS, LOGS
     tmp = Path(tempfile.mkdtemp())
     shutil.copytree(BOARD, tmp / "board") if BOARD.exists() else (tmp / "board").mkdir()
     os.environ["BOT_HIVE"] = str(tmp)
     BOARD = tmp / "board"
     LOCKS = BOARD / ".locks"
+    DOCS = tmp / "docs"
+    LOGS = tmp / "logs"
     (LOCKS).mkdir(exist_ok=True)
     # build a card and walk the machine
     meta = {"id": "T-9999", "title": "selftest", "lane": "forge",
