@@ -147,6 +147,42 @@ def assert_lane(meta: dict, lane: str | None):
         fail(f"{meta['id']}: lane is {meta['lane']}, not {lane}")
 
 
+def unmet_deps(meta: dict) -> list:
+    """'<dep> (<status>)' for every dep of meta that is not satisfied.
+
+    A dep is satisfied when its card is verified OR closed (closed is the
+    terminal success state, reached only via done -> verified -> closed).
+    """
+    out = []
+    for dep in meta.get("deps") or []:
+        dp = BOARD / f"{dep}.md"
+        if not dp.exists():
+            out.append(f"{dep} (missing card)")
+            continue
+        dmeta = parse_card(dp)
+        if dmeta.get("status") not in ("verified", "closed"):
+            out.append(f"{dep} ({dmeta.get('status', '?')})")
+    return out
+
+
+def waiting_deps(lane: str = "", status: str = "") -> str:
+    """'waiting on deps: ...' line listing queued cards with unmet deps."""
+    lines = []
+    for path in sorted(BOARD.glob("T-*.md")):
+        meta = parse_card(path)
+        if meta.get("status") != "queued":
+            continue
+        if lane and meta.get("lane") != lane:
+            continue
+        if status and meta.get("status") != status:
+            continue
+        unmet = unmet_deps(meta)
+        if unmet:
+            ids = ", ".join(u.split(" ")[0] for u in unmet)
+            lines.append(f"{meta['id']} (needs {ids})")
+    return f"waiting on deps: {'; '.join(lines)}" if lines else ""
+
+
 def transition(meta: dict, target: str):
     src = meta.get("status", "draft")
     if target not in STATUSES.get(src, []):
@@ -222,6 +258,17 @@ def cmd_plan(args):
 def cmd_claim(args):
     meta = load_card(args.card)
     assert_lane(meta, args.lane)
+    unmet = unmet_deps(meta)
+    if unmet:
+        fail(f"{args.card}: unmet dep(s): {', '.join(unmet)} — all deps must "
+             f"be verified before claim (PROTOCOL §3)")
+    if meta.get("status") == "claimed" and meta.get("owner") == (args.lane or "?"):
+        # owner re-claim: refresh the heartbeat (lock dir mtime)
+        lock = LOCKS / args.card
+        lock.mkdir(exist_ok=True)
+        os.utime(lock, None)
+        print(f"{args.card} claimed — heartbeat refreshed by {meta['owner']}")
+        return 0
     transition(meta, "claimed")
     meta["owner"] = args.lane or "?"
     write_card(meta)
@@ -370,6 +417,9 @@ def cmd_status(args):
         meta = parse_card(path)
         print(f"{meta['id']} [{meta['status']:>8}] lane={meta['lane']:<6} "
               f"plan={meta.get('plan') or '-':<6} {meta.get('title', '')[:50]}")
+    waiting = waiting_deps()
+    if waiting:
+        print(f"\n{waiting}")
     if stale:
         print(f"\nstale locks: {', '.join(stale)}")
     return 0
@@ -383,6 +433,9 @@ def cmd_list(args):
         if args.status and meta.get("status") != args.status:
             continue
         print(f"{meta['id']} [{meta['status']}] {meta.get('title', '')[:60]}")
+    waiting = waiting_deps(args.lane or "", args.status or "")
+    if waiting:
+        print(waiting)
     return 0
 
 
@@ -478,8 +531,40 @@ def selftest(args=None):
         assert False, "done accepted an empty --summary"
     except SystemExit:
         pass
+    # dependency guard (T-0012)
+    import io
+    import contextlib
+    def mk_dep_card(card_id: str, deps):
+        m = {"id": card_id, "title": "dep-test", "lane": "forge",
+             "status": "queued", "owner": "", "plan": "P-0000", "deps": deps,
+             "priority": 2, "attempts": 0, "created": now_iso()}
+        p = BOARD / f"{card_id}.md"
+        p.write_text(render_fm(m) + ("\n## Objective\nx\n## Spec\nDo:\nDo not:\n"
+                                     "## Acceptance criteria\n- [ ] c\n## Artifact contract\nx\n"
+                                     "## Result\n(filled at `hive done`)\nSummary: \n"))
+        m["_path"] = p
+        return m
+    mk_dep_card("T-9996", deps=["T-9995"])  # queued, dep unverified
+    mk_dep_card("T-9995", deps=[])
+    try:
+        cmd_claim(types.SimpleNamespace(card="T-9996", lane="forge"))
+        assert False, "claim with unverified dep accepted"
+    except SystemExit:
+        pass
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        cmd_status(types.SimpleNamespace(card=None))
+    assert "T-9996 (needs T-9995)" in buf.getvalue(), \
+        "waiting-on-deps line missing"
+    # verify the dep, then claim must succeed
+    d5 = parse_card(BOARD / "T-9995.md")
+    transition(d5, "claimed"); d5["owner"] = "forge"; write_card(d5)
+    transition(d5, "running")
+    transition(d5, "done")
+    transition(d5, "verified")
+    cmd_claim(types.SimpleNamespace(card="T-9996", lane="forge"))
     print("selftest: PASS (state machine + check-in + rolling log "
-          "+ done-Result enforcement)")
+          "+ done-Result enforcement + dep guard)")
     return 0
 
 
