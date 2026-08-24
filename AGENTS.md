@@ -66,6 +66,9 @@ python3 hive.py selftest
 ## Conventions
 
 - Python 3.11+, stdlib only, no third-party deps.
-- Board is git-tracked: every accept/hand-off/verdict is a commit.
+- Board and logs live in the append-only rolling logs (`logs/<plan>.md`);
+  card files, logs, and failures.md are gitignored by design — git tracks
+  the framework code and docs only. Card history is the board files
+  themselves plus the append-only logs.
 - Keep souls in sync: change a SOUL.md in `souls/` AND stage it to the
   profile (`~/.hermes/profiles/<bot>/SOUL.md`).
