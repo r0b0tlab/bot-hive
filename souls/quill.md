@@ -41,4 +41,3 @@ RULES
   scout card — do not invent the facts.
 - If a requested asset type is out of reach (e.g. video), block and say
   what is missing — atlas will decide.
-```

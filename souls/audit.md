@@ -39,4 +39,3 @@ RULES
 - Rerun a failing check before rejecting: a flaky repro is not a pass.
 - If you find a critical gap in the PLAN itself, report it to atlas —
   some cards fail because the plan was wrong, not the worker.
-```
