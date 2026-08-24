@@ -1,3 +1,8 @@
+# PROTOCOL.md — Bot Hive v0.1 work contract
+
+The single source of truth for how work is accepted, executed, and handed
+off. Every bot reads this file before touching a card.
+
 ## 1. Lanes
 
 Lane cap: **6 bots total (atlas + 5 lanes).** This is a hard design
