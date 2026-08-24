@@ -90,7 +90,9 @@ draft -> queued -> claimed -> running -> done -> [audit] -> verified -> closed
 1. Claim only cards where `lane` matches your lane. Never claim another
    lane's card; never re-route it yourself — `hive reroute` is atlas-only.
 2. Read `deps` before starting. If any dep is not `verified`, do not start;
-   report the state to atlas instead.
+   report the state to atlas instead. `hive claim` backs this at claim
+   time (T-0012): a claim on a card with an unmet dep is refused with
+   exit 1 — satisfied means `verified` or `closed`.
 3. The card body is the complete work order. If the spec is ambiguous or the
    acceptance criteria are untestable, do NOT improvise: `hive block` and
    report the ambiguity to atlas.
@@ -131,6 +133,17 @@ bot by handle ("@forge: claim and execute T-0003 — <one-line spec>").
 The desktop routes it into that bot's group session. The lane bot works
 in that session (its SOUL.md + worker skill apply) and reports in the
 room when done.
+
+Room milestones: every lane bot posts a one-line room message at claim,
+done, and block; audit posts every verdict to the room as well as the
+log. Nobody follows the team by polling the board — the room is the
+work surface, and silence in the room is invisible progress (T-0013).
+
+Dep wake-up: the moment a card is `verified`, atlas posts one room
+message naming every queued card whose dep set just cleared, e.g.
+"@quill: T-0010 is unblocked — T-0008 verified". Waiting on a dep is
+deterministic, not coincidental — no queued card sits unclaimed because
+nobody noticed its deps cleared.
 
 Atlas never spawns `hermes -p` or tmux for lane work. If a card needs a
 bot that is not in the room, atlas flags it to the user — never works
